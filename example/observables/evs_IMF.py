@@ -23,7 +23,7 @@ survey_area = 0.28 * u.deg**2
 fsky = float(survey_area / whole_sky)
 phi_max = evs._apply_fsky(N, f, F, fsky)
 redshift_idx = np.arange(len(z))
-_obs_str = f"evs_imf_double_powerlaw"
+_obs_str = f"imf_double_powerlaw_F444W"
 
 # IMF grid labels (just copy and paste)
 sfh_tag = "DoublePowerLaw_peak_age0.2_alpha1_beta-1"
@@ -62,72 +62,69 @@ obs_data = {
     'NIRCam.F444W': (flux_F444W, flux_err_F444W),
 }
 
-# Plotting
-fig, axes = plt.subplots(2, 2, figsize=(10, 10))
-axes = axes.flatten()
+# Plotting F444W only, can change band to plot other filters.
+fig, ax = plt.subplots(figsize=(8, 8))
 
-bands = ['NIRCam.F115W', 'NIRCam.F150W', 'NIRCam.F277W', 'NIRCam.F444W']
+band = 'NIRCam.F444W'
 
-for ax, band in zip(axes, bands):
+# Loads the grids for each IMF
+CI_flux = {}
 
-    # Loads the grids for each IMF
-    CI_flux = {}
+for imf, tag in imf_grids.items():
+    flux_grid = np.loadtxt(f"data/flux_grid_{band}_{tag}.txt")
 
-    for imf, tag in imf_grids.items():
-        flux_grid = np.loadtxt(f"data/flux_grid_{band}_{tag}.txt")
+    ci_list = []
+    for i in redshift_idx:
+        ci = compute_conf_ints(phi_max[i], flux_grid[:, i])
+        ci_safe = np.where(ci > 0, ci, 1e-30)
+        ci_list.append(np.log10(ci_safe))
 
-        ci_list = []
-        for i in redshift_idx:
-            ci = compute_conf_ints(phi_max[i], flux_grid[:, i])
-            ci_safe = np.where(ci > 0, ci, 1e-30)
-            ci_list.append(np.log10(ci_safe))
-
-        CI_flux[imf] = np.vstack(ci_list)
+    CI_flux[imf] = np.vstack(ci_list)
 
 
 
-    # IMF Models
-    ax.plot(z, CI_flux["chabrier"][:, 3],
-            linestyle='--', color='coral', linewidth=2.5,
-            label='Chabrier IMF')
+# IMF Models
+ax.plot(z, CI_flux["chabrier"][:, 3],
+        linestyle='--', color='coral', linewidth=2.5,
+        label='Chabrier IMF')
 
-    ax.plot(z, CI_flux["salpeter"][:, 3],
-            linestyle='--', color='steelblue', linewidth=2,
-            label='Salpeter IMF')
+ax.plot(z, CI_flux["salpeter"][:, 3],
+        linestyle='--', color='steelblue', linewidth=2,
+        label='Salpeter IMF')
 
-    ax.plot(z, CI_flux["kroupa"][:, 3],
-            linestyle='--', color='mediumseagreen', linewidth=2,
-            label='Kroupa IMF')
+ax.plot(z, CI_flux["kroupa"][:, 3],
+        linestyle='--', color='mediumseagreen', linewidth=2,
+        label='Kroupa IMF')
 
 
 
-    # Observed JWST sources
-    if band in obs_data:
-        flux_obs, flux_err_obs = obs_data[band]
-        mask = flux_obs > 0
+# Observed JWST sources
+if band in obs_data:
+    flux_obs, flux_err_obs = obs_data[band]
+    mask = flux_obs > 0
 
-        ax.errorbar(
-            z_obs[mask],
+    ax.errorbar(
+        z_obs[mask],
+        np.log10(flux_obs[mask]),
+        xerr=zerr[:, mask],
+        yerr=(
+            np.log10(flux_obs[mask]) -
+            np.log10(flux_obs[mask] - flux_err_obs[mask]),
+            np.log10(flux_obs[mask] + flux_err_obs[mask]) -
             np.log10(flux_obs[mask]),
-            xerr=zerr[:, mask],
-            yerr=(
-                np.log10(flux_obs[mask]) -
-                np.log10(flux_obs[mask] - flux_err_obs[mask]),
-                np.log10(flux_obs[mask] + flux_err_obs[mask]) -
-                np.log10(flux_obs[mask]),
-            ),
-            fmt='o',
-            color='orange',
-            markersize=5,
-            capsize=3,
-            zorder=10,
-        )
+        ),
+        fmt='o',
+        color='orange',
+        markersize=5,
+        capsize=3,
+        zorder=10,
+    )
 
-    ax.set_xlim(2, 18)
-    ax.set_ylim(-3, 8)
-    ax.set_xlabel('$z$', fontsize=14)
-    ax.set_ylabel("log10(Flux [nJy])", size=17)
-    ax.text(0.05, 0.05, band, transform=ax.transAxes)
+ax.set_xlim(2, 18)
+ax.set_ylim(0, 8)
+ax.set_xlabel('$z$', fontsize=14)
+ax.set_ylabel("log10(Flux [nJy])", size=17)
+ax.text(0.05, 0.95, band, transform=ax.transAxes, verticalalignment='top', fontsize=12)
 
 
 # Formatting
@@ -141,5 +138,5 @@ handles = [
 labels = ['Chabrier', 'Salpeter', 'Kroupa', 'JWST candidates']
 ax.legend(handles=handles, labels=labels, frameon=False, loc='upper right', fontsize=12, ncol=2)
 
-plt.savefig(f'plots/evs_{_obs_str}.png', bbox_inches='tight', dpi=200)
+plt.savefig(f'plots/evs_{_obs_str}_F444W.png', bbox_inches='tight', dpi=200)
 plt.show()

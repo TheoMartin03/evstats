@@ -22,7 +22,7 @@ survey_area = 0.28 * u.deg**2
 fsky = float(survey_area / whole_sky)
 phi_max = evs._apply_fsky(N, f, F, fsky)
 redshift_idx = np.arange(len(z))
-_obs_str = f'evs_sps_double_powerlaw'
+_obs_str = f'sps_double_powerlaw_F444W'
 
 # SPS grid files (just copy and paste)
 sfh_tag = "DoublePowerLaw_peak_age0.2_alpha1_beta-1"
@@ -63,73 +63,65 @@ obs_data = {
 }
 
 
-# Plotting
-fig, axes = plt.subplots(2, 2, figsize=(10, 10))
-axes = axes.flatten()
+# Plotting - F444W only
+fig, ax = plt.subplots(figsize=(8, 8))
 
-bands = ['NIRCam.F115W', 'NIRCam.F150W', 'NIRCam.F277W', 'NIRCam.F444W']
+band = 'NIRCam.F444W'
 
-for ax, band in zip(axes, bands):
+# Loads the grids for each SPS model
+CI_flux = {}
 
+for sps, tag in sps_grids.items():
+    flux_grid = np.loadtxt(f"data/flux_grid_{band}_{tag}.txt")
 
-    # Loads the grids for each SPS model
-    CI_flux = {}
+    ci_list = []
+    for i in redshift_idx:
+        ci = compute_conf_ints(phi_max[i], flux_grid[:, i])
+        ci_safe = np.where(ci > 0, ci, 1e-30)
+        ci_list.append(np.log10(ci_safe))
 
-    for sps, tag in sps_grids.items():
-        flux_grid = np.loadtxt(f"data/flux_grid_{band}_{tag}.txt")
+    CI_flux[sps] = np.vstack(ci_list)
 
-        ci_list = []
-        for i in redshift_idx:
-            ci = compute_conf_ints(phi_max[i], flux_grid[:, i])
-            ci_safe = np.where(ci > 0, ci, 1e-30)
-            ci_list.append(np.log10(ci_safe))
+# SPS Models
+ax.plot(z, CI_flux["BC03"][:, 3],
+        linestyle='--', color='coral', linewidth=2.5,
+        label='BC03')
 
-        CI_flux[sps] = np.vstack(ci_list)
+ax.plot(z, CI_flux["FSPS"][:, 3],
+        linestyle='-', color='steelblue', linewidth=2,
+        label='FSPS')
 
-    # SPS Models
-    ax.plot(z, CI_flux["BC03"][:, 3],
-            linestyle='--', color='coral', linewidth=2.5,
-            label='BC03')
+ax.plot(z, CI_flux["BPASS"][:, 3],
+        linestyle='-.', color='mediumseagreen', linewidth=2,
+        label='BPASS')
 
-    ax.plot(z, CI_flux["FSPS"][:, 3],
-            linestyle='-', color='steelblue', linewidth=2,
-            label='FSPS')
+# Observed JWST sources
+if band in obs_data:
+    flux_obs, flux_err_obs = obs_data[band]
+    mask = flux_obs > 0
 
-    ax.plot(z, CI_flux["BPASS"][:, 3],
-            linestyle='-.', color='mediumseagreen', linewidth=2,
-            label='BPASS')
-
-    # Observed JWST sources
-    if band in obs_data:
-        flux_obs, flux_err_obs = obs_data[band]
-        mask = flux_obs > 0
-
-        ax.errorbar(
-            z_obs[mask],
+    ax.errorbar(
+        z_obs[mask],
+        np.log10(flux_obs[mask]),
+        xerr=zerr[:, mask],
+        yerr=(
+            np.log10(flux_obs[mask]) -
+            np.log10(flux_obs[mask] - flux_err_obs[mask]),
+            np.log10(flux_obs[mask] + flux_err_obs[mask]) -
             np.log10(flux_obs[mask]),
-            xerr=zerr[:, mask],
-            yerr=(
-                np.log10(flux_obs[mask]) -
-                np.log10(flux_obs[mask] - flux_err_obs[mask]),
-                np.log10(flux_obs[mask] + flux_err_obs[mask]) -
-                np.log10(flux_obs[mask]),
-            ),
-            fmt='o',
-            color='orange',
-            markersize=5,
-            capsize=3,
-            zorder=10,
-        )
+        ),
+        fmt='o',
+        color='orange',
+        markersize=5,
+        capsize=3,
+        zorder=10,
+    )
 
-    ax.set_xlim(2, 18)
-    ax.set_ylim(-3, 8)
-    ax.set_xlabel('$z$', fontsize=14)
-    ax.set_ylabel("log10(Flux [nJy])", size=17)
-    ax.text(0.05, 0.05, band, transform=ax.transAxes)
-
-
-leg = ax.legend(frameon=False, bbox_to_anchor=(0.44,0.19), fontsize=12, handletextpad=0.2) 
-plt.gca().add_artist(leg)
+ax.set_xlim(2, 18)
+ax.set_ylim(0, 8)
+ax.set_xlabel('$z$', fontsize=14)
+ax.set_ylabel("log10(Flux [nJy])", size=17)
+ax.text(0.05, 0.95, band, transform=ax.transAxes, verticalalignment='top', fontsize=12)
 
 # Formatting
 handles = [
@@ -139,9 +131,8 @@ handles = [
     plt.Line2D([0], [0], color='orange', marker='o', linestyle='None'),
 ]
 
-labels = ['BC03', 'FSPS', 'BPASS', 'JWST candidates', '']
+labels = ['BC03', 'FSPS', 'BPASS', 'JWST candidates']
 ax.legend(handles=handles, labels=labels, frameon=False, loc='upper right', fontsize=12, ncol=2)
 
-plt.tight_layout()
-plt.savefig(f'plots/evs_{_obs_str}.png', bbox_inches='tight', dpi=200)
+plt.savefig(f'plots/evs_{_obs_str}_F444W.png', bbox_inches='tight', dpi=200)
 plt.show()
