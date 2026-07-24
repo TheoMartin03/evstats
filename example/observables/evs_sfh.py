@@ -144,5 +144,5 @@ for c in vp._children: c._children.reverse()
 vp.align="right"
 
 plt.tight_layout()
-plt.savefig(f'plots/1evs_{_obs_str}.png', bbox_inches='tight', dpi=200)
+plt.savefig(f'plots/evs_{_obs_str}.png', bbox_inches='tight', dpi=200)
 plt.show()
